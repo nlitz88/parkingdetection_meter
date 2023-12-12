@@ -36,13 +36,11 @@ typedef uint8_t width_t;
 
 /**
  * @brief Struct type containing the metadata associated with the cropped image
- * of a license plate. Contains a pointer to the array of bytes comprising the
- * plate image, the number of bytes in the array of plate bytes, and the height
- * and width of the plate image in # pixels.
+ * of a license plate. Contains the number of bytes in the array of plate bytes
+ * and the height and width of the plate image in # pixels. 
  * 
  */
 typedef struct {
-    uint8_t *plate_bytes;
     plate_byte_count_t num_bytes;
     height_t plate_height_px;
     width_t plate_width_px;

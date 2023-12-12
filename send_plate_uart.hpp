@@ -13,7 +13,7 @@
 #include "send_plate_common.hpp"
 
 /**
- * @brief Struct type definining a uart receiver. Fields defined according to
+ * @brief Struct type containing all fields needed to communicate via UART.
  * https://en.wikipedia.org/wiki/Universal_asynchronous_receiver-transmitter and
  * a recap on
  * https://www.deviceplus.com/arduino/arduino-communication-protocols-tutorial/#3protocols 
@@ -21,4 +21,17 @@
  */
 typedef struct {
     uint32_t baud_rate;
-} receiver_t;
+} uart_connection_t;
+
+/**
+ * @brief Sends an image of a license plate to a hub via UART.
+ * 
+ * @param plate_metadata Struct containing the metadata of the plate's image
+ * crop.
+ * @param plate_bytes Buffer containing the bytes.
+ * @param uart_connection Struct containing the details necessary to communicate
+ * over UART.
+ * @return send_status_t Returns SUCCESS upon a successul transmission, FAILURE
+ * otherwise.
+ */
+send_status_t send_plate_uart(plate_image_metadata_t *plate_metadata, uint8_t *plate_bytes, uart_connection_t uart_connection);
