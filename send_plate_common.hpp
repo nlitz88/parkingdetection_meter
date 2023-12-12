@@ -31,8 +31,8 @@ typedef uint32_t plate_byte_count_t;
  * @brief Types used for height and width of the license plate image crops.
  * 
  */
-typedef uint16_t height_t;
-typedef uint16_t width_t;
+typedef uint8_t height_t;
+typedef uint8_t width_t;
 
 /**
  * @brief Struct type containing the metadata associated with the cropped image
