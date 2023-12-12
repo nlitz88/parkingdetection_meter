@@ -26,8 +26,6 @@
  * @param plate_metadata Struct containing the metadata of the plate's image
  * crop.
  * @param plate_bytes Buffer containing the bytes.
- * @param uart_connection Struct containing the details necessary to communicate
- * over UART.
  * @return send_status_t Returns SUCCESS upon a successul transmission, FAILURE
  * otherwise.
  */
