@@ -19,9 +19,6 @@
  * https://www.deviceplus.com/arduino/arduino-communication-protocols-tutorial/#3protocols 
  * 
  */
-typedef struct {
-    uint32_t baud_rate;
-} uart_connection_t;
 
 /**
  * @brief Sends an image of a license plate to a hub via UART.
@@ -34,4 +31,4 @@ typedef struct {
  * @return send_status_t Returns SUCCESS upon a successul transmission, FAILURE
  * otherwise.
  */
-send_status_t send_plate_uart(plate_image_metadata_t *plate_metadata, uint8_t *plate_bytes, uart_connection_t uart_connection);
+send_status_t send_plate_uart(plate_image_metadata_t *plate_metadata, uint8_t *plate_bytes);
