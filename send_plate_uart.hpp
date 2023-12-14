@@ -29,4 +29,4 @@
  * @return send_status_t Returns SUCCESS upon a successul transmission, FAILURE
  * otherwise.
  */
-send_status_t send_plate_uart(plate_image_metadata_t *plate_metadata, uint8_t *plate_bytes);
+send_status_t send_plate_uart(plate_image_metadata_t *plate_metadata, uint8_t *plate_bytes, size_t bb_x, size_t bb_y, size_t bb_width, size_t bb_height);
