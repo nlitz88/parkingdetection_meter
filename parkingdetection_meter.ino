@@ -190,9 +190,9 @@ void loop()
         return;
     }
 
-    ei::signal_t signal;
-    signal.total_length = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT;
-    signal.get_data = &ei_camera_get_data;
+    // ei::signal_t signal;
+    // signal.total_length = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT;
+    // signal.get_data = &ei_camera_get_data;
 
     if (ei_camera_capture((size_t)EI_CLASSIFIER_INPUT_WIDTH, (size_t)EI_CLASSIFIER_INPUT_HEIGHT, snapshot_buf) == false) {
         ei_printf("Failed to capture image\r\n");
@@ -200,42 +200,54 @@ void loop()
         return;
     }
 
-    // Run the classifier
-    ei_impulse_result_t result = { 0 };
+    // TEST: For now, let's just transmit the entire RGB capture over serial to test the demo script.
+    // https://www.arduino.cc/reference/en/language/functions/communication/serial/write/
+    // 1. Write the height.
+    Serial.write(uint8_t(EI_CLASSIFIER_INPUT_WIDTH)); // If this doesn't work, I think the image is 96x96.
+    // 2. Write the width.
+    Serial.write(uint8_t(EI_CLASSIFIER_INPUT_HEIGHT));
+    // 3. Write the length (number of bytes total that comprise the image buffer).
+    uint32_t image_num_bytes = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT * EI_CAMERA_FRAME_BYTE_SIZE
+    Serial.write(image_num_bytes);
+    // 4. Write the actual image bytes from the buffer.
+    Serial.write(snapshot_buf, image_num_bytes);
 
-    EI_IMPULSE_ERROR err = run_classifier(&signal, &result, debug_nn);
-    if (err != EI_IMPULSE_OK) {
-        ei_printf("ERR: Failed to run classifier (%d)\n", err);
-        return;
-    }
+//     // Run the classifier
+//     ei_impulse_result_t result = { 0 };
 
-    // print the predictions
-    ei_printf("Predictions (DSP: %d ms., Classification: %d ms., Anomaly: %d ms.): \n",
-                result.timing.dsp, result.timing.classification, result.timing.anomaly);
+//     EI_IMPULSE_ERROR err = run_classifier(&signal, &result, debug_nn);
+//     if (err != EI_IMPULSE_OK) {
+//         ei_printf("ERR: Failed to run classifier (%d)\n", err);
+//         return;
+//     }
 
-#if EI_CLASSIFIER_OBJECT_DETECTION == 1
-    bool bb_found = result.bounding_boxes[0].value > 0;
-    for (size_t ix = 0; ix < result.bounding_boxes_count; ix++) {
-        auto bb = result.bounding_boxes[ix];
-        if (bb.value == 0) {
-            continue;
-        }
-        ei_printf("    %s (%f) [ x: %u, y: %u, width: %u, height: %u ]\n", bb.label, bb.value, bb.x, bb.y, bb.width, bb.height);
-        /// 
-    }
-    if (!bb_found) {
-        ei_printf("    No objects found\n");
-    }
-#else
-    for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
-        ei_printf("    %s: %.5f\n", result.classification[ix].label,
-                                    result.classification[ix].value);
-    }
-#endif
+//     // print the predictions
+//     ei_printf("Predictions (DSP: %d ms., Classification: %d ms., Anomaly: %d ms.): \n",
+//                 result.timing.dsp, result.timing.classification, result.timing.anomaly);
 
-#if EI_CLASSIFIER_HAS_ANOMALY == 1
-        ei_printf("    anomaly score: %.3f\n", result.anomaly);
-#endif
+// #if EI_CLASSIFIER_OBJECT_DETECTION == 1
+//     bool bb_found = result.bounding_boxes[0].value > 0;
+//     for (size_t ix = 0; ix < result.bounding_boxes_count; ix++) {
+//         auto bb = result.bounding_boxes[ix];
+//         if (bb.value == 0) {
+//             continue;
+//         }
+//         ei_printf("    %s (%f) [ x: %u, y: %u, width: %u, height: %u ]\n", bb.label, bb.value, bb.x, bb.y, bb.width, bb.height);
+//         /// 
+//     }
+//     if (!bb_found) {
+//         ei_printf("    No objects found\n");
+//     }
+// #else
+//     for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
+//         ei_printf("    %s: %.5f\n", result.classification[ix].label,
+//                                     result.classification[ix].value);
+//     }
+// #endif
+
+// #if EI_CLASSIFIER_HAS_ANOMALY == 1
+//         ei_printf("    anomaly score: %.3f\n", result.anomaly);
+// #endif
 
 
     free(snapshot_buf);
