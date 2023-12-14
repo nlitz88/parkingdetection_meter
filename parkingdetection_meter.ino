@@ -135,7 +135,7 @@ static camera_config_t camera_config = {
 
     .jpeg_quality = 12, //0-63 lower number means higher quality
     .fb_count = 1,       //if more than one, i2s runs in continuous mode. Use only with JPEG
-    .fb_location = CAMERA_FB_IN_PSRAM,
+    .fb_location = CAMERA_FB_IN_DRAM, // NOTE: HAD TO CHANGE THIS, as I don't have PSRAM.
     .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
 };
 
@@ -207,7 +207,7 @@ void loop()
     // 2. Write the width.
     Serial.write(uint8_t(EI_CLASSIFIER_INPUT_HEIGHT));
     // 3. Write the length (number of bytes total that comprise the image buffer).
-    uint32_t image_num_bytes = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT * EI_CAMERA_FRAME_BYTE_SIZE
+    uint32_t image_num_bytes = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT * EI_CAMERA_FRAME_BYTE_SIZE;
     Serial.write(image_num_bytes);
     // 4. Write the actual image bytes from the buffer.
     Serial.write(snapshot_buf, image_num_bytes);
