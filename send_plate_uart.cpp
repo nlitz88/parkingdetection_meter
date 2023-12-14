@@ -37,6 +37,11 @@ send_status_t send_plate_uart(plate_image_metadata_t *plate_metadata, uint8_t *p
         }
     }
 
+    // // Send whole image data (if bounding box doesn't work)
+    // for (int i = 0; i < imageSize; i++) {
+    //     mySerial.write(imageData[i]);
+    // }
+
     return send_status_t::SUCCESS;
 
 }
