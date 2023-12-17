@@ -97,8 +97,8 @@
 #endif
 
 /* Constant defines -------------------------------------------------------- */
-#define EI_CAMERA_RAW_FRAME_BUFFER_COLS           320
-#define EI_CAMERA_RAW_FRAME_BUFFER_ROWS           240
+#define EI_CAMERA_RAW_FRAME_BUFFER_COLS           96
+#define EI_CAMERA_RAW_FRAME_BUFFER_ROWS           96
 #define EI_CAMERA_FRAME_BYTE_SIZE                 3
 
 /* Private variables ------------------------------------------------------- */
@@ -131,7 +131,7 @@ static camera_config_t camera_config = {
     .ledc_channel = LEDC_CHANNEL_0,
 
     .pixel_format = PIXFORMAT_JPEG, //YUV422,GRAYSCALE,RGB565,JPEG
-    .frame_size = FRAMESIZE_QVGA,    //QQVGA-UXGA Do not use sizes above QVGA when not JPEG
+    .frame_size = FRAMESIZE_96X96,    //QQVGA-UXGA Do not use sizes above QVGA when not JPEG
 
     .jpeg_quality = 12, //0-63 lower number means higher quality
     .fb_count = 1,       //if more than one, i2s runs in continuous mode. Use only with JPEG
@@ -142,7 +142,7 @@ static camera_config_t camera_config = {
 /* Function definitions ------------------------------------------------------- */
 bool ei_camera_init(void);
 void ei_camera_deinit(void);
-bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf) ;
+bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf);
 
 /**
 * @brief      Arduino setup function
@@ -153,8 +153,6 @@ void setup()
     Serial.begin(115200);
     //comment out the below line to start inference immediately after upload
     while (!Serial);
-    // Serial.println("Edge Impulse Inferencing Demo");
-    ei_printf("This ei print statement worked!");
     if (ei_camera_init() == false) {
         ei_printf("Failed to initialize Camera!\r\n");
         // Serial.println("Failed to initialize Camera--from Serial.");
@@ -162,6 +160,13 @@ void setup()
     else {
         ei_printf("Camera initialized\r\n");
     }
+
+    // snapshot_buf = (uint8_t*)malloc(EI_CAMERA_RAW_FRAME_BUFFER_COLS * EI_CAMERA_RAW_FRAME_BUFFER_ROWS * EI_CAMERA_FRAME_BYTE_SIZE);
+    // // check if allocation was successful
+    // if(snapshot_buf == nullptr) {
+    //     ei_printf("ERR: Failed to allocate snapshot buffer!\n");
+    //     return;
+    // }
 
     ei_printf("\nStarting continious inference in 2 seconds...\n");
     ei_sleep(2000);
@@ -176,7 +181,7 @@ void loop()
 {
 
     // instead of wait_ms, we'll wait on the signal, this allows threads to cancel us...
-    if (ei_sleep(5) != EI_IMPULSE_OK) {
+    if (ei_sleep(500) != EI_IMPULSE_OK) {
         return;
     }
 
@@ -191,7 +196,7 @@ void loop()
     }
 
     ei::signal_t signal;
-    signal.total_length = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT;
+    signal.total_length = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT; // * 3 ??
     signal.get_data = &ei_camera_get_data;
 
     if (ei_camera_capture((size_t)EI_CLASSIFIER_INPUT_WIDTH, (size_t)EI_CLASSIFIER_INPUT_HEIGHT, snapshot_buf) == false) {
@@ -331,6 +336,8 @@ void ei_camera_deinit(void) {
  *
  */
 bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf) {
+
+  // Sus--why hardcoded false?
     bool do_resize = false;
 
     if (!is_initialised) {
