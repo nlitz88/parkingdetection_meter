@@ -97,8 +97,8 @@
 #endif
 
 /* Constant defines -------------------------------------------------------- */
-#define EI_CAMERA_RAW_FRAME_BUFFER_COLS           96
-#define EI_CAMERA_RAW_FRAME_BUFFER_ROWS           96
+#define EI_CAMERA_RAW_FRAME_BUFFER_COLS           160
+#define EI_CAMERA_RAW_FRAME_BUFFER_ROWS           120
 #define EI_CAMERA_FRAME_BYTE_SIZE                 3
 
 /* Private variables ------------------------------------------------------- */
@@ -131,7 +131,7 @@ static camera_config_t camera_config = {
     .ledc_channel = LEDC_CHANNEL_0,
 
     .pixel_format = PIXFORMAT_JPEG, //YUV422,GRAYSCALE,RGB565,JPEG
-    .frame_size = FRAMESIZE_96X96,    //QQVGA-UXGA Do not use sizes above QVGA when not JPEG
+    .frame_size = FRAMESIZE_QQVGA,    //QQVGA-UXGA Do not use sizes above QVGA when not JPEG
 
     .jpeg_quality = 12, //0-63 lower number means higher quality
     .fb_count = 1,       //if more than one, i2s runs in continuous mode. Use only with JPEG
