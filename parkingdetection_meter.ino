@@ -135,7 +135,7 @@ static camera_config_t camera_config = {
 
     .jpeg_quality = 12, //0-63 lower number means higher quality
     .fb_count = 1,       //if more than one, i2s runs in continuous mode. Use only with JPEG
-    .fb_location = CAMERA_FB_IN_DRAM, // NOTE: HAD TO CHANGE THIS, as I don't have PSRAM.
+    .fb_location = CAMERA_FB_IN_PSRAM, // NOTE: HAD TO CHANGE THIS, as I don't have PSRAM.
     .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
 };
 
