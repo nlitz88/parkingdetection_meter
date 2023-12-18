@@ -175,7 +175,7 @@ void setup()
         delay(1000);
     }
 
-    wifiMulti.addAP("state", "litzinger2");
+    wifiMulti.addAP("SSID", "PASSWORD");
 
     ei_printf("\nStarting continious inference in 2 seconds...\n");
     ei_sleep(2000);
