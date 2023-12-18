@@ -209,43 +209,45 @@ void loop()
     signal.total_length = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT; // * 3 ??
     signal.get_data = &ei_camera_get_data;
 
-    if (ei_camera_capture((size_t)EI_CLASSIFIER_INPUT_WIDTH, (size_t)EI_CLASSIFIER_INPUT_HEIGHT, snapshot_buf) == false) {
+    // Camera buffer pointer.
+    camera_fb_t *camera_buffer = nullptr;
+    if (ei_camera_capture((size_t)EI_CLASSIFIER_INPUT_WIDTH, (size_t)EI_CLASSIFIER_INPUT_HEIGHT, snapshot_buf, &camera_buffer) == false) {
         ei_printf("Failed to capture image\r\n");
         free(snapshot_buf);
         return;
     }
 
     // Send test request. Using basic HTTPClient example for demo, rather than Espressif's more robust API.
-    if((wifiMulti.run() == WL_CONNECTED)) {
+    // if((wifiMulti.run() == WL_CONNECTED)) {
 
-        HTTPClient http;
+    //     HTTPClient http;
 
-        Serial.print("[HTTP] begin...\n");
-        // configure traged server and url
-        //http.begin("https://www.howsmyssl.com/a/check", ca); //HTTPS
-        http.begin("http://192.168.0.151:5000/test_post"); //HTTP
+    //     Serial.print("[HTTP] begin...\n");
+    //     // configure traged server and url
+    //     //http.begin("https://www.howsmyssl.com/a/check", ca); //HTTPS
+    //     http.begin("http://192.168.0.151:5000/test_post"); //HTTP
 
-        Serial.print("[HTTP] Post...\n");
-        // start connection and send HTTP header
-        char *payload = "hello!";
-        int httpCode = http.sendRequest("POST", (uint8_t *)payload, 6);
+    //     Serial.print("[HTTP] Post...\n");
+    //     // start connection and send HTTP header
+    //     char *payload = "hello!";
+    //     int httpCode = http.sendRequest("POST", (uint8_t *)payload, 6);
 
-        // httpCode will be negative on error
-        if(httpCode > 0) {
-            // HTTP header has been send and Server response header has been handled
-            Serial.printf("[HTTP] Response... code: %d\n", httpCode);
+    //     // httpCode will be negative on error
+    //     if(httpCode > 0) {
+    //         // HTTP header has been send and Server response header has been handled
+    //         Serial.printf("[HTTP] Response... code: %d\n", httpCode);
 
-            // file found at server
-            if(httpCode == HTTP_CODE_OK) {
-                String payload = http.getString();
-                Serial.println(payload);
-            }
-        } else {
-            Serial.printf("[HTTP] POST.. failed, error: %s\n", http.errorToString(httpCode).c_str());
-        }
+    //         // file found at server
+    //         if(httpCode == HTTP_CODE_OK) {
+    //             String payload = http.getString();
+    //             Serial.println(payload);
+    //         }
+    //     } else {
+    //         Serial.printf("[HTTP] POST.. failed, error: %s\n", http.errorToString(httpCode).c_str());
+    //     }
 
-        http.end();
-    }
+    //     http.end();
+    // }
 
     // Run the classifier
     ei_impulse_result_t result = { 0 };
@@ -253,6 +255,8 @@ void loop()
     EI_IMPULSE_ERROR err = run_classifier(&signal, &result, debug_nn);
     if (err != EI_IMPULSE_OK) {
         ei_printf("ERR: Failed to run classifier (%d)\n", err);
+        free(snapshot_buf);
+        esp_camera_fb_return(fb);
         return;
     }
 
@@ -273,6 +277,41 @@ void loop()
     if (!bb_found) {
         ei_printf("    No objects found\n");
     }
+    // For now, if any bounding boxes are found, we're just going to send the entire image to the hub API.
+    else {
+          if((wifiMulti.run() == WL_CONNECTED)) {
+
+        HTTPClient http;
+
+        Serial.print("[HTTP] begin...\n");
+        // configure traged server and url
+        //http.begin("https://www.howsmyssl.com/a/check", ca); //HTTPS
+        http.begin("http://192.168.0.151:5000/process_plate"); //HTTP
+
+        Serial.print("[HTTP] Post...\n");
+        // start connection and send HTTP header
+        String content_type_header_name = "Content-Type";
+        String content_type_header_value = "image/jpeg";
+        http.addHeader(content_type_header_name, content_type_header_value);
+        int httpCode = http.sendRequest("POST", camera_buffer->buf, camera_buffer->len);
+
+        // httpCode will be negative on error
+        if(httpCode > 0) {
+            // HTTP header has been send and Server response header has been handled
+            Serial.printf("[HTTP] Response... code: %d\n", httpCode);
+
+            // file found at server
+            if(httpCode == HTTP_CODE_OK) {
+                String payload = http.getString();
+                Serial.println(payload);
+            }
+        } else {
+            Serial.printf("[HTTP] POST.. failed, error: %s\n", http.errorToString(httpCode).c_str());
+        }
+
+        http.end();
+      }
+    }
 #else
     for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
         ei_printf("    %s: %.5f\n", result.classification[ix].label,
@@ -284,6 +323,7 @@ void loop()
         ei_printf("    anomaly score: %.3f\n", result.anomaly);
 #endif
 
+    esp_camera_fb_return(fb);
 
     free(snapshot_buf);
 
@@ -361,7 +401,7 @@ void ei_camera_deinit(void) {
  * @retval     false if not initialised, image captured, rescaled or cropped failed
  *
  */
-bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf) {
+bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf, camera_fb_t *&camera_buffer_pointer) {
 
   // Sus--why hardcoded false?
     bool do_resize = false;
@@ -372,6 +412,7 @@ bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf
     }
 
     camera_fb_t *fb = esp_camera_fb_get();
+    camera_buffer_pointer = fb;
 
     if (!fb) {
         ei_printf("Camera capture failed\n");
@@ -380,7 +421,7 @@ bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf
 
    bool converted = fmt2rgb888(fb->buf, fb->len, PIXFORMAT_JPEG, snapshot_buf);
 
-   esp_camera_fb_return(fb);
+  //  esp_camera_fb_return(fb);
 
    if(!converted){
        ei_printf("Conversion failed\n");
