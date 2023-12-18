@@ -256,7 +256,7 @@ void loop()
     if (err != EI_IMPULSE_OK) {
         ei_printf("ERR: Failed to run classifier (%d)\n", err);
         free(snapshot_buf);
-        esp_camera_fb_return(fb);
+        esp_camera_fb_return(camera_buffer);
         return;
     }
 
@@ -293,6 +293,7 @@ void loop()
         String content_type_header_name = "Content-Type";
         String content_type_header_value = "image/jpeg";
         http.addHeader(content_type_header_name, content_type_header_value);
+        Serial.println("Sending image to hub API!");
         int httpCode = http.sendRequest("POST", camera_buffer->buf, camera_buffer->len);
 
         // httpCode will be negative on error
@@ -323,7 +324,7 @@ void loop()
         ei_printf("    anomaly score: %.3f\n", result.anomaly);
 #endif
 
-    esp_camera_fb_return(fb);
+    esp_camera_fb_return(camera_buffer);
 
     free(snapshot_buf);
 
@@ -401,7 +402,7 @@ void ei_camera_deinit(void) {
  * @retval     false if not initialised, image captured, rescaled or cropped failed
  *
  */
-bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf, camera_fb_t *&camera_buffer_pointer) {
+bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf, camera_fb_t **camera_buffer_pointer) {
 
   // Sus--why hardcoded false?
     bool do_resize = false;
@@ -412,7 +413,7 @@ bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf
     }
 
     camera_fb_t *fb = esp_camera_fb_get();
-    camera_buffer_pointer = fb;
+    *camera_buffer_pointer = fb;
 
     if (!fb) {
         ei_printf("Camera capture failed\n");
