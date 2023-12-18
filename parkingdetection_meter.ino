@@ -23,9 +23,14 @@
 /* Includes ---------------------------------------------------------------- */
 #include <Parking_Detection_Xiao_inferencing.h>
 #include "edge-impulse-sdk/dsp/image/image.hpp"
-
 #include "esp_camera.h"
-#include "esp_http_client.h"
+// FROM BasicHTTPClient.ino
+#include <WiFi.h>
+#include <WiFiMulti.h>
+
+#include <HTTPClient.h>
+
+WiFiMulti wifiMulti;
 
 // Select camera model - find more camera models in camera_pins.h file here
 // https://github.com/espressif/arduino-esp32/blob/master/libraries/ESP32/examples/Camera/CameraWebServer/camera_pins.h
@@ -144,136 +149,7 @@ bool ei_camera_init(void);
 void ei_camera_deinit(void);
 bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf);
 
-#define MAX_HTTP_RECV_BUFFER 512
-#define MAX_HTTP_OUTPUT_BUFFER 2048
-static const char *TAG = "HTTP_CLIENT";
 
-esp_err_t _http_event_handler(esp_http_client_event_t *evt)
-{
-    static char *output_buffer;  // Buffer to store response of http request from event handler
-    static int output_len;       // Stores number of bytes read
-    switch(evt->event_id) {
-        case HTTP_EVENT_ERROR:
-            ESP_LOGD(TAG, "HTTP_EVENT_ERROR");
-            break;
-        case HTTP_EVENT_ON_CONNECTED:
-            ESP_LOGD(TAG, "HTTP_EVENT_ON_CONNECTED");
-            break;
-        case HTTP_EVENT_HEADER_SENT:
-            ESP_LOGD(TAG, "HTTP_EVENT_HEADER_SENT");
-            break;
-        case HTTP_EVENT_ON_HEADER:
-            ESP_LOGD(TAG, "HTTP_EVENT_ON_HEADER, key=%s, value=%s", evt->header_key, evt->header_value);
-            break;
-        case HTTP_EVENT_ON_DATA:
-            ESP_LOGD(TAG, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
-            // Clean the buffer in case of a new request
-            if (output_len == 0 && evt->user_data) {
-                // we are just starting to copy the output data into the use
-                memset(evt->user_data, 0, MAX_HTTP_OUTPUT_BUFFER);
-            }
-            /*
-             *  Check for chunked encoding is added as the URL for chunked encoding used in this example returns binary data.
-             *  However, event handler can also be used in case chunked encoding is used.
-             */
-            if (!esp_http_client_is_chunked_response(evt->client)) {
-                // If user_data buffer is configured, copy the response into the buffer
-                int copy_len = 0;
-                if (evt->user_data) {
-                    // The last byte in evt->user_data is kept for the NULL character in case of out-of-bound access.
-                    copy_len = MIN(evt->data_len, (MAX_HTTP_OUTPUT_BUFFER - output_len));
-                    if (copy_len) {
-                        memcpy(evt->user_data + output_len, evt->data, copy_len);
-                    }
-                } else {
-                    int content_len = esp_http_client_get_content_length(evt->client);
-                    if (output_buffer == NULL) {
-                        // We initialize output_buffer with 0 because it is used by strlen() and similar functions therefore should be null terminated.
-                        output_buffer = (char *) calloc(content_len + 1, sizeof(char));
-                        output_len = 0;
-                        if (output_buffer == NULL) {
-                            ESP_LOGE(TAG, "Failed to allocate memory for output buffer");
-                            return ESP_FAIL;
-                        }
-                    }
-                    copy_len = MIN(evt->data_len, (content_len - output_len));
-                    if (copy_len) {
-                        memcpy(output_buffer + output_len, evt->data, copy_len);
-                    }
-                }
-                output_len += copy_len;
-            }
-
-            break;
-        case HTTP_EVENT_ON_FINISH:
-            ESP_LOGD(TAG, "HTTP_EVENT_ON_FINISH");
-            if (output_buffer != NULL) {
-                // Response is accumulated in output_buffer. Uncomment the below line to print the accumulated response
-                // ESP_LOG_BUFFER_HEX(TAG, output_buffer, output_len);
-                free(output_buffer);
-                output_buffer = NULL;
-            }
-            output_len = 0;
-            break;
-        case HTTP_EVENT_DISCONNECTED:
-            ESP_LOGI(TAG, "HTTP_EVENT_DISCONNECTED");
-            int mbedtls_err = 0;
-            esp_err_t err = esp_tls_get_and_clear_last_error((esp_tls_error_handle_t)evt->data, &mbedtls_err, NULL);
-            if (err != 0) {
-                ESP_LOGI(TAG, "Last esp error code: 0x%x", err);
-                ESP_LOGI(TAG, "Last mbedtls failure: 0x%x", mbedtls_err);
-            }
-            if (output_buffer != NULL) {
-                free(output_buffer);
-                output_buffer = NULL;
-            }
-            output_len = 0;
-            break;
-        case HTTP_EVENT_REDIRECT:
-            ESP_LOGD(TAG, "HTTP_EVENT_REDIRECT");
-            esp_http_client_set_header(evt->client, "From", "user@example.com");
-            esp_http_client_set_header(evt->client, "Accept", "text/html");
-            esp_http_client_set_redirection(evt->client);
-            break;
-    }
-    return ESP_OK;
-}
-
-static void http_rest_with_hostname_path(void) {
-  // esp_http_client_config_t config = {
-  //     .host = "192.168.0.151",
-  //     .port = 5000,
-  //     .path = "/process_plate",
-  //     .method = HTTP_METHOD_POST,
-  //     .transport_type = HTTP_TRANSPORT_OVER_TCP,
-  //     .event_handler = _http_event_handler,
-  // };
-
-  // Create new config for this client to connect to the parking HUB's API.
-  esp_http_client_config_t config;
-  esp_http_client_set_host(&config, "192.168.0.151");
-  esp_http_client_set_port(&config, 5000);
-  esp_http_client_set_path(&config, "/test_post");
-  esp_http_client_set_method(&config, HTTP_METHOD_POST);
-  esp_http_client_set_transport_type(&config, HTTP_TRANSPORT_OVER_TCP);
-  esp_http_client_set_event_handler(&config, _http_event_handler)
-
-  // Create a handle for the config to reference this HTTP connection.
-  esp_http_client_handle_t client = esp_http_client_init(&config);
-
-  // POST
-  // TODO: Update this by setting this to the address of the buffer our image data is in!
-  const char *post_data = "field1=value1&field2=value2";
-  // Update the address where the client code should send the data from.
-  esp_http_client_set_post_field(client, post_data, strlen(post_data));
-  err = esp_http_client_perform(client);
-  if (err == ESP_OK) {
-      ESP_LOGI(TAG, "HTTP POST Status = %d, content_length = %"PRId64,
-              esp_http_client_get_status_code(client),
-              esp_http_client_get_content_length(client));
-  } else {
-      ESP_LOGE(TAG, "HTTP POST request failed: %s", esp_err_to_name(err));
-}
 
 /**
 * @brief      Arduino setup function
@@ -292,12 +168,14 @@ void setup()
         ei_printf("Camera initialized\r\n");
     }
 
-    // snapshot_buf = (uint8_t*)malloc(EI_CAMERA_RAW_FRAME_BUFFER_COLS * EI_CAMERA_RAW_FRAME_BUFFER_ROWS * EI_CAMERA_FRAME_BYTE_SIZE);
-    // // check if allocation was successful
-    // if(snapshot_buf == nullptr) {
-    //     ei_printf("ERR: Failed to allocate snapshot buffer!\n");
-    //     return;
-    // }
+    // Connect to WiFi.
+    for(uint8_t t = 4; t > 0; t--) {
+        Serial.printf("[SETUP] WAIT %d...\n", t);
+        Serial.flush();
+        delay(1000);
+    }
+
+    wifiMulti.addAP("state", "litzinger2");
 
     ei_printf("\nStarting continious inference in 2 seconds...\n");
     ei_sleep(2000);
@@ -316,8 +194,6 @@ void loop()
         return;
     }
 
-    // Try out sending a POST request to the server.
-    http_rest_with_hostname_path();
 
     // Serial.println("Loop ran!");
 
@@ -338,22 +214,37 @@ void loop()
         free(snapshot_buf);
         return;
     }
-    
-    // TEST: For now, let's just transmit the entire RGB capture over serial to test the demo script.
-    // https://www.arduino.cc/reference/en/language/functions/communication/serial/write/
-    // HAVE TO SEND A START SEQUENCE FIRST!
-    // Serial.print("NEW_IMAGE");
-    // Serial.println();
-    // Serial.print(uint8_t(9));
-    // 1. Write the height.
-    // Serial.write(uint8_t(EI_CLASSIFIER_INPUT_WIDTH)); // If this doesn't work, I think the image is 96x96.
-    // // 2. Write the width.
-    // Serial.write(uint8_t(EI_CLASSIFIER_INPUT_HEIGHT));
-    // // 3. Write the length (number of bytes total that comprise the image buffer).
-    // uint32_t image_num_bytes = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT * EI_CAMERA_FRAME_BYTE_SIZE;
-    // Serial.write(image_num_bytes);
-    // // 4. Write the actual image bytes from the buffer.
-    // Serial.write(snapshot_buf, image_num_bytes);
+
+    // Send test request. Using basic HTTPClient example for demo, rather than Espressif's more robust API.
+    if((wifiMulti.run() == WL_CONNECTED)) {
+
+        HTTPClient http;
+
+        Serial.print("[HTTP] begin...\n");
+        // configure traged server and url
+        //http.begin("https://www.howsmyssl.com/a/check", ca); //HTTPS
+        http.begin("http://192.168.0.151:5000/test_post"); //HTTP
+
+        Serial.print("[HTTP] Post...\n");
+        // start connection and send HTTP header
+        int httpCode = http.sendRequest("POST", "hello!", 6);
+
+        // httpCode will be negative on error
+        if(httpCode > 0) {
+            // HTTP header has been send and Server response header has been handled
+            Serial.printf("[HTTP] Response... code: %d\n", httpCode);
+
+            // file found at server
+            if(httpCode == HTTP_CODE_OK) {
+                String payload = http.getString();
+                Serial.println(payload);
+            }
+        } else {
+            Serial.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
+        }
+
+        http.end();
+    }
 
     // Run the classifier
     ei_impulse_result_t result = { 0 };
