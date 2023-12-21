@@ -23,9 +23,14 @@
 /* Includes ---------------------------------------------------------------- */
 #include <Parking_Detection_Xiao_inferencing.h>
 #include "edge-impulse-sdk/dsp/image/image.hpp"
-
 #include "esp_camera.h"
+// FROM BasicHTTPClient.ino
+#include <WiFi.h>
+#include <WiFiMulti.h>
 
+#include <HTTPClient.h>
+
+WiFiMulti wifiMulti;
 
 // Select camera model - find more camera models in camera_pins.h file here
 // https://github.com/espressif/arduino-esp32/blob/master/libraries/ESP32/examples/Camera/CameraWebServer/camera_pins.h
@@ -144,6 +149,8 @@ bool ei_camera_init(void);
 void ei_camera_deinit(void);
 bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf);
 
+
+
 /**
 * @brief      Arduino setup function
 */
@@ -161,12 +168,14 @@ void setup()
         ei_printf("Camera initialized\r\n");
     }
 
-    // snapshot_buf = (uint8_t*)malloc(EI_CAMERA_RAW_FRAME_BUFFER_COLS * EI_CAMERA_RAW_FRAME_BUFFER_ROWS * EI_CAMERA_FRAME_BYTE_SIZE);
-    // // check if allocation was successful
-    // if(snapshot_buf == nullptr) {
-    //     ei_printf("ERR: Failed to allocate snapshot buffer!\n");
-    //     return;
-    // }
+    // Connect to WiFi.
+    for(uint8_t t = 4; t > 0; t--) {
+        Serial.printf("[SETUP] WAIT %d...\n", t);
+        Serial.flush();
+        delay(1000);
+    }
+
+    wifiMulti.addAP("SSID", "PASSWORD");
 
     ei_printf("\nStarting continious inference in 2 seconds...\n");
     ei_sleep(2000);
@@ -185,6 +194,7 @@ void loop()
         return;
     }
 
+
     // Serial.println("Loop ran!");
 
     snapshot_buf = (uint8_t*)malloc(EI_CAMERA_RAW_FRAME_BUFFER_COLS * EI_CAMERA_RAW_FRAME_BUFFER_ROWS * EI_CAMERA_FRAME_BYTE_SIZE);
@@ -199,27 +209,45 @@ void loop()
     signal.total_length = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT; // * 3 ??
     signal.get_data = &ei_camera_get_data;
 
-    if (ei_camera_capture((size_t)EI_CLASSIFIER_INPUT_WIDTH, (size_t)EI_CLASSIFIER_INPUT_HEIGHT, snapshot_buf) == false) {
+    // Camera buffer pointer.
+    camera_fb_t *camera_buffer = nullptr;
+    if (ei_camera_capture((size_t)EI_CLASSIFIER_INPUT_WIDTH, (size_t)EI_CLASSIFIER_INPUT_HEIGHT, snapshot_buf, &camera_buffer) == false) {
         ei_printf("Failed to capture image\r\n");
         free(snapshot_buf);
         return;
     }
-    
-    // TEST: For now, let's just transmit the entire RGB capture over serial to test the demo script.
-    // https://www.arduino.cc/reference/en/language/functions/communication/serial/write/
-    // HAVE TO SEND A START SEQUENCE FIRST!
-    // Serial.print("NEW_IMAGE");
-    // Serial.println();
-    // Serial.print(uint8_t(9));
-    // 1. Write the height.
-    // Serial.write(uint8_t(EI_CLASSIFIER_INPUT_WIDTH)); // If this doesn't work, I think the image is 96x96.
-    // // 2. Write the width.
-    // Serial.write(uint8_t(EI_CLASSIFIER_INPUT_HEIGHT));
-    // // 3. Write the length (number of bytes total that comprise the image buffer).
-    // uint32_t image_num_bytes = EI_CLASSIFIER_INPUT_WIDTH * EI_CLASSIFIER_INPUT_HEIGHT * EI_CAMERA_FRAME_BYTE_SIZE;
-    // Serial.write(image_num_bytes);
-    // // 4. Write the actual image bytes from the buffer.
-    // Serial.write(snapshot_buf, image_num_bytes);
+
+    // Send test request. Using basic HTTPClient example for demo, rather than Espressif's more robust API.
+    // if((wifiMulti.run() == WL_CONNECTED)) {
+
+    //     HTTPClient http;
+
+    //     Serial.print("[HTTP] begin...\n");
+    //     // configure traged server and url
+    //     //http.begin("https://www.howsmyssl.com/a/check", ca); //HTTPS
+    //     http.begin("http://192.168.0.151:5000/test_post"); //HTTP
+
+    //     Serial.print("[HTTP] Post...\n");
+    //     // start connection and send HTTP header
+    //     char *payload = "hello!";
+    //     int httpCode = http.sendRequest("POST", (uint8_t *)payload, 6);
+
+    //     // httpCode will be negative on error
+    //     if(httpCode > 0) {
+    //         // HTTP header has been send and Server response header has been handled
+    //         Serial.printf("[HTTP] Response... code: %d\n", httpCode);
+
+    //         // file found at server
+    //         if(httpCode == HTTP_CODE_OK) {
+    //             String payload = http.getString();
+    //             Serial.println(payload);
+    //         }
+    //     } else {
+    //         Serial.printf("[HTTP] POST.. failed, error: %s\n", http.errorToString(httpCode).c_str());
+    //     }
+
+    //     http.end();
+    // }
 
     // Run the classifier
     ei_impulse_result_t result = { 0 };
@@ -227,6 +255,8 @@ void loop()
     EI_IMPULSE_ERROR err = run_classifier(&signal, &result, debug_nn);
     if (err != EI_IMPULSE_OK) {
         ei_printf("ERR: Failed to run classifier (%d)\n", err);
+        free(snapshot_buf);
+        esp_camera_fb_return(camera_buffer);
         return;
     }
 
@@ -247,6 +277,42 @@ void loop()
     if (!bb_found) {
         ei_printf("    No objects found\n");
     }
+    // For now, if any bounding boxes are found, we're just going to send the entire image to the hub API.
+    else {
+          if((wifiMulti.run() == WL_CONNECTED)) {
+
+        HTTPClient http;
+
+        Serial.print("[HTTP] begin...\n");
+        // configure traged server and url
+        //http.begin("https://www.howsmyssl.com/a/check", ca); //HTTPS
+        http.begin("http://192.168.0.151:5000/process_plate"); //HTTP
+
+        Serial.print("[HTTP] Post...\n");
+        // start connection and send HTTP header
+        String content_type_header_name = "Content-Type";
+        String content_type_header_value = "image/jpeg";
+        http.addHeader(content_type_header_name, content_type_header_value);
+        Serial.println("Sending image to hub API!");
+        int httpCode = http.sendRequest("POST", camera_buffer->buf, camera_buffer->len);
+
+        // httpCode will be negative on error
+        if(httpCode > 0) {
+            // HTTP header has been send and Server response header has been handled
+            Serial.printf("[HTTP] Response... code: %d\n", httpCode);
+
+            // file found at server
+            if(httpCode == HTTP_CODE_OK) {
+                String payload = http.getString();
+                Serial.println(payload);
+            }
+        } else {
+            Serial.printf("[HTTP] POST.. failed, error: %s\n", http.errorToString(httpCode).c_str());
+        }
+
+        http.end();
+      }
+    }
 #else
     for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++) {
         ei_printf("    %s: %.5f\n", result.classification[ix].label,
@@ -258,6 +324,7 @@ void loop()
         ei_printf("    anomaly score: %.3f\n", result.anomaly);
 #endif
 
+    esp_camera_fb_return(camera_buffer);
 
     free(snapshot_buf);
 
@@ -335,7 +402,7 @@ void ei_camera_deinit(void) {
  * @retval     false if not initialised, image captured, rescaled or cropped failed
  *
  */
-bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf) {
+bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf, camera_fb_t **camera_buffer_pointer) {
 
   // Sus--why hardcoded false?
     bool do_resize = false;
@@ -346,6 +413,7 @@ bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf
     }
 
     camera_fb_t *fb = esp_camera_fb_get();
+    *camera_buffer_pointer = fb;
 
     if (!fb) {
         ei_printf("Camera capture failed\n");
@@ -354,7 +422,7 @@ bool ei_camera_capture(uint32_t img_width, uint32_t img_height, uint8_t *out_buf
 
    bool converted = fmt2rgb888(fb->buf, fb->len, PIXFORMAT_JPEG, snapshot_buf);
 
-   esp_camera_fb_return(fb);
+  //  esp_camera_fb_return(fb);
 
    if(!converted){
        ei_printf("Conversion failed\n");
